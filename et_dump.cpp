@@ -7,17 +7,13 @@
 //       it's encountered, so you can find your MPD bank's tag from real
 //       data without already knowing your DAQ config.
 //
-//   et_dump <et_system_file> --tag 0xXXXX
-//       Decode mode: treats banks with that tag as MPD/APV25 raw data,
-//       decodes them, and prints each strip hit.
-//
 // ET API calls are illustrative -- check them against your CODA/ET
 // version's et.h; station config args and et_events_get signature can
 // differ slightly between versions.
 //
 // Build (adjust to wherever ET actually lives on your system):
-//   g++ -O2 -std=c++17 et_dump.cpp mpd_apv_decoder.cpp evio_walk.cpp \
-//       -I../include -I$CODA/et/include -L$CODA/et/lib -let -o et_dump
+//   g++ -O2 -std=c++17 et_dump.cpp evio_walk.cpp \
+//       -I$CODA/common/include -L$CODA/Linux-x86_64/lib -let -o et_dump
 
 #include <cstdio>
 #include <cstdint>
@@ -30,24 +26,13 @@
 #include <et.h>
 
 #include "evio_walk.h"
-#include "mpd_apv_decoder.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " <et_system_file> [--tag 0xXXXX]\n";
+        std::cerr << "usage: " << argv[0] << " <et_system_file>\n";
         return 1;
     }
     std::string et_filename = argv[1];
-
-    bool decode_mode = false;
-    uint16_t target_tag = 0;
-    for (int i = 2; i < argc; ++i) {
-        if (std::string(argv[i]) == "--tag" && i + 1 < argc) {
-            target_tag = static_cast<uint16_t>(std::strtoul(argv[i + 1], nullptr, 0));
-            decode_mode = true;
-            ++i;
-        }
-    }
 
     // --- ET setup: parallel, non-blocking station so this never steals or
     // slows down events for the main CODA data-recording chain. ---
@@ -72,23 +57,10 @@ int main(int argc, char** argv) {
     et_att_id att_id;
     et_station_attach(sys_id, stat_id, &att_id);
 
-    if (decode_mode) {
-        std::printf("Decode mode: looking for banks with tag 0x%04x\n", target_tag);
-    } else {
-        std::printf(
-            "Discovery mode: printing each newly-seen bank tag. Once you spot\n"
-            "your MPD bank's tag in the output below, re-run with:\n"
-            "    %s %s --tag 0xTAG\n\n",
-            argv[0], et_filename.c_str());
-    }
+    std::printf("Discovery mode: printing each newly-seen EVIO bank tag.\n\n");
 
     std::set<uint32_t> seen;  // (tag<<16 | type<<8 | num) already printed, discovery mode only
     uint32_t event_number = 0;
-
-    // Placeholder plane map -- replace once you have a real GEM channel map.
-    auto plane_for = [](uint16_t apv_id) -> uint8_t {
-        return static_cast<uint8_t>(apv_id % 2);
-    };
 
     et_event* ev_array[1];
     while (true) {
@@ -109,30 +81,12 @@ int main(int argc, char** argv) {
             [&](uint16_t tag, uint8_t type, uint8_t num, int depth,
                 const uint32_t* payload, size_t payload_n) {
 
-                if (!decode_mode) {
-                    uint32_t key = (static_cast<uint32_t>(tag) << 16)
-                                 | (static_cast<uint32_t>(type) << 8) | num;
-                    if (seen.insert(key).second) {
-                        std::printf(
-                            "event %u: bank tag=0x%04x type=0x%02x num=%u depth=%d words=%zu\n",
-                            event_number, tag, type, num, depth, payload_n);
-                    }
-                    return;
-                }
-
-                if (tag != target_tag) {
-                    return;
-                }
-
-                // `num` stands in for module/mpd id here unless you have a
-                // real ROC-crate-to-mpd_id mapping to use instead.
-                auto hits = decode_mpd_word_stream(payload, payload_n, num, plane_for);
-                for (const auto& h : hits) {
+                uint32_t key = (static_cast<uint32_t>(tag) << 16)
+                             | (static_cast<uint32_t>(type) << 8) | num;
+                if (seen.insert(key).second) {
                     std::printf(
-                        "evt=%u mpd=%u apv=%u ch=%u plane=%u samples=[%d,%d,%d,%d,%d,%d]\n",
-                        event_number, h.mpd_id, h.apv_id, h.channel, h.plane,
-                        h.samples[0], h.samples[1], h.samples[2],
-                        h.samples[3], h.samples[4], h.samples[5]);
+                        "event %u: bank tag=0x%04x type=0x%02x num=%u depth=%d words=%zu\n",
+                        event_number, tag, type, num, depth, payload_n);
                 }
             });
 
