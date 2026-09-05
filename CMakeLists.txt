@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 project(gem_online_monitor VERSION 0.1.0 LANGUAGES CXX)
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -31,7 +33,12 @@ if(BUILD_ET_DUMP)
     if(ET_INCLUDE_DIR AND ET_LIBRARY)
         add_executable(et_dump et_dump.cpp)
         target_include_directories(et_dump PRIVATE ${ET_INCLUDE_DIR})
-        target_link_libraries(et_dump PRIVATE evio_walk ${ET_LIBRARY})
+        target_link_libraries(et_dump PRIVATE
+            evio_walk
+            ${ET_LIBRARY}
+            Threads::Threads
+            ${CMAKE_DL_LIBS}
+        )
         message(STATUS "et_dump: enabled")
         message(STATUS "  ET include: ${ET_INCLUDE_DIR}")
         message(STATUS "  ET library: ${ET_LIBRARY}")
