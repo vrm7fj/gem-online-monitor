@@ -70,12 +70,12 @@ int main(int argc, char** argv) {
         }
 
         void* data = nullptr;
-        int len_bytes = 0;
+        size_t len_bytes = 0;
         et_event_getdata(ev_array[0], &data);
         et_event_getlength(ev_array[0], &len_bytes);
 
         const uint32_t* words = static_cast<const uint32_t*>(data);
-        size_t n_words = static_cast<size_t>(len_bytes) / sizeof(uint32_t);
+        size_t n_words = len_bytes / sizeof(uint32_t);
 
         walk_evio_banks(words, n_words, /*depth=*/0,
             [&](uint16_t tag, uint8_t type, uint8_t num, int depth,
